@@ -13,5 +13,5 @@ cabal-version:       >=1.10
 library
   exposed-modules:     IntTable IntMap
   ghc-options:         -O2 -Wall
-  build-depends:       base >= 4
+  build-depends:       base >= 4, ghc-prim
   default-language:    Haskell98

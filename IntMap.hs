@@ -1,6 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE CPP, MagicHash, NoImplicitPrelude #-}
-
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  IntMap
