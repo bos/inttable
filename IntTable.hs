@@ -1,0 +1,2 @@
+module IntTable
+    where
