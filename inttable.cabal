@@ -15,3 +15,15 @@ library
   ghc-options:         -O2 -Wall
   build-depends:       base >= 4, ghc-prim
   default-language:    Haskell98
+
+benchmark benchmarks
+  default-language: Haskell98
+  type:           exitcode-stdio-1.0
+  main-is:        Benchmarks.hs
+  ghc-options:    -O2 -rtsopts
+
+  build-depends:
+    base >= 4 && < 5,
+    criterion >= 0.8,
+    mwc-random,
+    vector
