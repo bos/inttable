@@ -33,7 +33,7 @@ import Data.IORef
 import Data.Bits
 import Foreign.ForeignPtr
 import Foreign.Storable
-import Control.Monad ((=<<), liftM, forM_, when)
+import Control.Monad ((=<<), liftM, forM_)
 
 newtype IntTable a = IntTable (IORef (IT a))
 
@@ -146,16 +146,17 @@ updateWith f k (IntTable ref) = do
   it@IT{..} <- readIORef ref
   let idx = indexOf k it
       go changed bkt@Bucket{..}
-        | bucketKey == k = (True, Just bucketValue,
+        | bucketKey == k = (Just bucketValue,
                             case f bucketValue of
                               Just val -> bkt { bucketValue = val }
                               Nothing -> bucketNext)
         | otherwise = case go changed bucketNext of
-                        (c, ov, nb) -> (c, ov, bkt { bucketNext = nb })
-      go _ e = (False, Nothing, e)
-  (changed, oldVal, newBucket) <- go False `liftM` readArr tabArr idx
-  when changed $ writeArr tabArr idx newBucket
-  return oldVal
+                        (ov, nb) -> (ov, bkt { bucketNext = nb })
+      go _ e = (Nothing, e)
+  (oldVal, newBucket) <- go False `liftM` readArr tabArr idx
+  case oldVal of
+    Just _ -> writeArr tabArr idx newBucket >> return oldVal
+    _      -> return oldVal
 
 newArr :: a -> Int -> IO (Arr a)
 newArr defval (I# n#) = IO $ \s0# ->
