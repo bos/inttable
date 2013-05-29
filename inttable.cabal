@@ -12,7 +12,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     IntTable IntMap
-  ghc-options:         -O2 -Wall
+  ghc-options:         -O2 -Wall -fspec-constr-threshold=450
   build-depends:       base >= 4, ghc-prim
   default-language:    Haskell98
 
@@ -20,7 +20,7 @@ benchmark benchmarks
   default-language: Haskell98
   type:           exitcode-stdio-1.0
   main-is:        Benchmarks.hs
-  ghc-options:    -O2 -rtsopts
+  ghc-options:    -O2 -rtsopts -fspec-constr-threshold=450
 
   build-depends:
     base >= 4 && < 5,
