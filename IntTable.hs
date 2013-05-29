@@ -27,13 +27,13 @@ import GHC.Base (Monad(..), ($), const, otherwise)
 import GHC.Classes (Eq(..), Ord(..))
 import GHC.Num (Num(..))
 import GHC.Prim (MutableArray#, RealWorld, newArray#, readArray#, seq, sizeofMutableArray#, writeArray#)
-import GHC.Types (IO(..), Int(..))
+import GHC.Types (Bool(..), IO(..), Int(..))
 import GHC.Err (undefined)
 import Data.IORef
 import Data.Bits
 import Foreign.ForeignPtr
 import Foreign.Storable
-import Control.Monad ((=<<), liftM, forM_)
+import Control.Monad ((=<<), liftM, forM_, when)
 
 newtype IntTable a = IntTable (IORef (IT a))
 
@@ -142,7 +142,20 @@ delete :: Key -> IntTable a -> IO (Maybe a)
 delete = undefined
 
 updateWith :: (a -> Maybe a) -> Key -> IntTable a -> IO (Maybe a)
-updateWith = undefined
+updateWith f k (IntTable ref) = do
+  it@IT{..} <- readIORef ref
+  let idx = indexOf k it
+      go changed bkt@Bucket{..}
+        | bucketKey == k = (True, Just bucketValue,
+                            case f bucketValue of
+                              Just val -> bkt { bucketValue = val }
+                              Nothing -> bucketNext)
+        | otherwise = case go changed bucketNext of
+                        (c, ov, nb) -> (c, ov, bkt { bucketNext = nb })
+      go _ e = (False, Nothing, e)
+  (changed, oldVal, newBucket) <- go False `liftM` readArr tabArr idx
+  when changed $ writeArr tabArr idx newBucket
+  return oldVal
 
 newArr :: a -> Int -> IO (Arr a)
 newArr defval (I# n#) = IO $ \s0# ->

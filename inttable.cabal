@@ -19,11 +19,13 @@ library
 benchmark benchmarks
   default-language: Haskell98
   type:           exitcode-stdio-1.0
+  hs-source-dirs: benchmarks
   main-is:        Benchmarks.hs
   ghc-options:    -O2 -rtsopts -fspec-constr-threshold=450
 
   build-depends:
     base >= 4 && < 5,
     criterion >= 0.8,
+    inttable,
     mwc-random,
     vector
