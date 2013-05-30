@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, MagicHash, NoImplicitPrelude, RecordWildCards, UnboxedTuples #-}
+{-# LANGUAGE BangPatterns, NoImplicitPrelude, RecordWildCards #-}
 
 module IntTable
     (
@@ -22,11 +22,12 @@ module IntTable
     , updateWith
     ) where
 
+import Arr
 import Data.Maybe (Maybe(..))
 import GHC.Base (Monad(..), ($), const, otherwise)
 import GHC.Classes (Eq(..), Ord(..))
 import GHC.Num (Num(..))
-import GHC.Prim (MutableArray#, RealWorld, newArray#, readArray#, seq, sizeofMutableArray#, writeArray#)
+import GHC.Prim (seq)
 import GHC.Types (Bool(..), IO(..), Int(..))
 import Data.IORef
 import Data.Bits
@@ -40,8 +41,6 @@ data IT a = IT {
       tabArr  :: {-# UNPACK #-} !(Arr (Bucket a))
     , tabSize :: {-# UNPACK #-} !(ForeignPtr Int)
     }
-
-data Arr a = Arr (MutableArray# RealWorld a)
 
 data Bucket a = Empty
               | Bucket {
@@ -156,18 +155,3 @@ updateWith f k (IntTable ref) = do
   case oldVal of
     Just _ -> writeArr tabArr idx newBucket >> return oldVal
     _      -> return oldVal
-
-newArr :: a -> Int -> IO (Arr a)
-newArr defval (I# n#) = IO $ \s0# ->
-  case newArray# n# defval s0# of (# s1#, marr# #) -> (# s1#, Arr marr# #)
-
-sizeArr :: Arr a -> Int
-sizeArr (Arr a) = I# (sizeofMutableArray# a)
-
-readArr :: Arr a -> Int -> IO a
-readArr (Arr a) (I# n#) = IO $ \s0# ->
-  case readArray# a n# s0# of (# s1#, val #) -> (# s1#, val #)
-
-writeArr :: Arr a -> Int -> a -> IO ()
-writeArr (Arr a) (I# n#) val = IO $ \s0# ->
-  case writeArray# a n# val s0# of s1# -> (# s1#, () #)
