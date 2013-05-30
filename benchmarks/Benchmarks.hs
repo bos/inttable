@@ -32,6 +32,11 @@ updateMap m = G.foldl' go m
 
 updateTable t ks = G.forM_ ks $ \k -> IT.updateWith update k t
 
+deleteMap m = G.foldl' go m
+  where go m k = snd $ IM.delete k m
+
+deleteTable t ks = G.forM_ ks $ \k -> IT.delete k t
+
 genKVs :: Int -> IO (Vector (Int, Int))
 genKVs count = do
   gen <- create
@@ -44,15 +49,20 @@ main = do
               let !m = mkMap kvs
               t <- mkTable kvs
               return (size, kvs, m, t)
-  let benches (size, kvs, m, t) = bgroup (show size) [
-          bgroup "construct" [
+  let benches (size, kvs, m, t) = [
+          bgroup "construct" [ bgroup (show size) [
             bench "map" $ whnf mkMap kvs
           , bench "table" $ whnfIO (mkTable kvs)
-          ]
+          ] ]
         , let ks = G.map fst . G.take (G.length kvs `div` 2) $ kvs
-          in bgroup "update" [
+          in bgroup "update" [ bgroup (show size) [
                bench "map" $ whnf (updateMap m) ks
              , bench "table" $ whnfIO (updateTable t ks)
-             ]
+             ] ]
+        , let ks = G.map fst . G.take (G.length kvs `div` 2) $ kvs
+          in bgroup "delete" [ bgroup (show size) [
+               bench "map" $ whnf (deleteMap m) ks
+             , bench "table" $ whnfIO (deleteTable t ks)
+             ] ]
         ]
-  defaultMain $ map benches inputs
+  defaultMain $ concatMap benches inputs

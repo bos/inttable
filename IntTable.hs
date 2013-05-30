@@ -28,7 +28,6 @@ import GHC.Classes (Eq(..), Ord(..))
 import GHC.Num (Num(..))
 import GHC.Prim (MutableArray#, RealWorld, newArray#, readArray#, seq, sizeofMutableArray#, writeArray#)
 import GHC.Types (Bool(..), IO(..), Int(..))
-import GHC.Err (undefined)
 import Data.IORef
 import Data.Bits
 import Foreign.ForeignPtr
@@ -139,7 +138,7 @@ indexOf :: Key -> IT a -> Int
 indexOf k IT{..} = k .&. (sizeArr tabArr - 1)
 
 delete :: Key -> IntTable a -> IO (Maybe a)
-delete = undefined
+delete k t = updateWith (const Nothing) k t
 
 updateWith :: (a -> Maybe a) -> Key -> IntTable a -> IO (Maybe a)
 updateWith f k (IntTable ref) = do
