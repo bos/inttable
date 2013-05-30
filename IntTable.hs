@@ -106,7 +106,7 @@ insertWith f k v inttable@(IntTable ref) = do
         | otherwise = go bkt { bucketNext = seen } bucketNext
       go seen _ = withForeignPtr tabSize $ \ptr -> do
         size <- peek ptr
-        if size + 1 >= sizeArr tabArr `shiftR` 1
+        if size + 1 >= sizeArr tabArr - (sizeArr tabArr `shiftR` 2)
           then grow it ref size >> insertWith f k v inttable
           else do
             v `seq` writeArr tabArr idx (Bucket k v seen)
