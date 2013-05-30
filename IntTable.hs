@@ -37,8 +37,8 @@ import Control.Monad ((=<<), liftM, forM_)
 newtype IntTable a = IntTable (IORef (IT a))
 
 data IT a = IT {
-      tabArr  :: Arr (Bucket a)
-    , tabSize :: ForeignPtr Int
+      tabArr  :: {-# UNPACK #-} !(Arr (Bucket a))
+    , tabSize :: {-# UNPACK #-} !(ForeignPtr Int)
     }
 
 data Arr a = Arr (MutableArray# RealWorld a)
