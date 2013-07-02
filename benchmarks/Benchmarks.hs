@@ -57,12 +57,12 @@ main = do
         , let ks = G.map fst . G.take (G.length kvs `div` 2) $ kvs
           in bgroup "update" [ bgroup (show size) [
                bench "map" $ whnf (updateMap m) ks
-             , bench "table" $ whnfIO (updateTable t ks)
+             , bench "table" $ whnfIO (mkTable kvs >>= flip updateTable ks)
              ] ]
         , let ks = G.map fst . G.take (G.length kvs `div` 2) $ kvs
           in bgroup "delete" [ bgroup (show size) [
                bench "map" $ whnf (deleteMap m) ks
-             , bench "table" $ whnfIO (deleteTable t ks)
+             , bench "table" $ whnfIO (mkTable kvs >>= flip deleteTable ks)
              ] ]
         ]
   defaultMain $ concatMap benches inputs

@@ -131,7 +131,7 @@ toList (IntTable ref) = do
 fromList :: [(Key, a)] -> IO (IntTable a)
 fromList kvs = do
   t <- new 64
-  forM_ kvs $ \(k,v) -> insertWith const k v t
+  forM_ kvs $ \(k,v) -> insertWith (\a b -> b) k v t
   return t
 
 indexOf :: Key -> IT a -> Int
