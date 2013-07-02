@@ -2,6 +2,7 @@
 module Main (main) where
 
 import Control.Applicative
+import Data.Bits
 import Data.IntMap (IntMap)
 import Data.Word (Word8)
 import IntTable (IntTable, Key)
@@ -35,10 +36,19 @@ t_fromList kvs = map (\(k,_) -> IM.lookup k im) kvs ==
   where IT it = fromList kvs
         im = IM.fromList kvs
 
+t_insertWith :: Key -> V -> [KV] -> Bool
+t_insertWith k v kvs =
+    IM.lookup k (IM.insertWith f k v im) ==
+    unsafePerformIO (IT.insertWith f k v it >> IT.lookup k it)
+  where IT it = fromList kvs
+        im = IM.fromList kvs
+        f a b = (a `xor` b) `rotate` 3
+
 main :: IO ()
 main = defaultMain properties
 
 properties :: [Test]
 properties = [
     testProperty "fromList" t_fromList
+  , testProperty "insertWith" t_insertWith
   ]
