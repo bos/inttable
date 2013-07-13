@@ -23,10 +23,10 @@ module IntTable
     ) where
 
 import Arr (Arr)
-import Control.Monad ((=<<), liftM, forM_)
+import Control.Monad ((=<<), liftM, forM_, when)
 import Data.Bits
 import Data.IORef
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), isJust)
 import Foreign.ForeignPtr
 import Foreign.Storable
 import GHC.Base (Monad(..), ($), const, otherwise)
@@ -102,7 +102,8 @@ insertWith f k v inttable@(IntTable ref) = do
   let go seen bkt@Bucket{..}
         | bucketKey == k = do
           let !v' = f bucketValue v
-          Arr.write tabArr idx (Bucket k v' (seen <> bucketNext))
+              !next = seen <> bucketNext
+          Arr.write tabArr idx (Bucket k v' next)
           return (Just bucketValue)
         | otherwise = go bkt { bucketNext = seen } bucketNext
       go seen _ = withForeignPtr tabSize $ \ptr -> do
@@ -145,14 +146,18 @@ updateWith f k (IntTable ref) = do
   it@IT{..} <- readIORef ref
   let idx = indexOf k it
       go changed bkt@Bucket{..}
-        | bucketKey == k = (Just bucketValue,
-                            case f bucketValue of
-                              Just val -> bkt { bucketValue = val }
-                              Nothing -> bucketNext)
+        | bucketKey == k =
+            let !nb = case f bucketValue of
+                        Just val -> bkt { bucketValue = val }
+                        Nothing -> bucketNext
+            in (Just bucketValue, nb)
         | otherwise = case go changed bucketNext of
                         (ov, nb) -> (ov, bkt { bucketNext = nb })
       go _ e = (Nothing, e)
   (oldVal, newBucket) <- go False `liftM` Arr.read tabArr idx
-  case oldVal of
-    Just _ -> Arr.write tabArr idx newBucket >> return oldVal
-    _      -> return oldVal
+  when (isJust oldVal) $ do
+    Arr.write tabArr idx newBucket
+    withForeignPtr tabSize $ \ptr -> do
+      size <- peek ptr
+      poke ptr (size - 1)
+  return oldVal
