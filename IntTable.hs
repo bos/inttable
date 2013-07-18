@@ -9,6 +9,7 @@ module IntTable
     -- * Query
     , lookup
     , toList
+    , getSize
 
     -- * Construction
     , new
@@ -23,7 +24,7 @@ module IntTable
     ) where
 
 import Arr (Arr)
-import Control.Monad ((=<<), liftM, forM_, when)
+import Control.Monad ((=<<), liftM, forM_, unless, when)
 import Data.Bits
 import Data.IORef
 import Data.Maybe (Maybe(..), isJust)
@@ -117,6 +118,11 @@ insertWith f k v inttable@(IntTable ref) = do
   go Empty =<< Arr.read tabArr idx
 {-# INLINABLE insertWith #-}
 
+getSize :: IntTable a -> IO Int
+getSize (IntTable ref) = do
+  IT{..} <- readIORef ref
+  withForeignPtr tabSize peek
+
 toList :: IntTable a -> IO [(Key, a)]
 toList (IntTable ref) = do
   IT{..} <- readIORef ref
@@ -147,17 +153,19 @@ updateWith f k (IntTable ref) = do
   let idx = indexOf k it
       go changed bkt@Bucket{..}
         | bucketKey == k =
-            let !nb = case f bucketValue of
+            let fbv = f bucketValue
+                !nb = case fbv of
                         Just val -> bkt { bucketValue = val }
                         Nothing -> bucketNext
-            in (Just bucketValue, nb)
+            in (fbv, Just bucketValue, nb)
         | otherwise = case go changed bucketNext of
-                        (ov, nb) -> (ov, bkt { bucketNext = nb })
-      go _ e = (Nothing, e)
-  (oldVal, newBucket) <- go False `liftM` Arr.read tabArr idx
+                        (fbv, ov, nb) -> (fbv, ov, bkt { bucketNext = nb })
+      go _ e = (Nothing, Nothing, e)
+  (fbv, oldVal, newBucket) <- go False `liftM` Arr.read tabArr idx
   when (isJust oldVal) $ do
     Arr.write tabArr idx newBucket
-    withForeignPtr tabSize $ \ptr -> do
-      size <- peek ptr
-      poke ptr (size - 1)
+    unless (isJust fbv) $
+      withForeignPtr tabSize $ \ptr -> do
+        size <- peek ptr
+        poke ptr (size - 1)
   return oldVal

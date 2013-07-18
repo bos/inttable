@@ -32,7 +32,9 @@ instance Arbitrary IT where
 same :: [KV] -> IntMap V -> IntTable V -> IO Bool
 same kvs im it = do
   itr <- mapM (\(k,_) -> IT.lookup k it) kvs
-  return $! map (\(k,_) -> IM.lookup k im) kvs == itr
+  itsize <- IT.getSize it
+  return $! map (\(k,_) -> IM.lookup k im) kvs == itr &&
+            itsize == IM.size im
 
 t_fromList :: [KV] -> Bool
 t_fromList kvs = unsafePerformIO $
