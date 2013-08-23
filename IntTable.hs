@@ -1,10 +1,10 @@
-{-# LANGUAGE BangPatterns, NoImplicitPrelude, RecordWildCards #-}
+{-# LANGUAGE BangPatterns, NoImplicitPrelude, RecordWildCards, Trustworthy #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module IntTable
     (
     -- * Map type
       IntTable
-    , Key
 
     -- * Query
     , lookup
@@ -19,23 +19,28 @@ module IntTable
     , insertWith
 
     -- * Delete\/Update
+    , reset
     , delete
     , updateWith
     ) where
 
 import Arr (Arr)
-import Control.Monad ((=<<), liftM, forM_, unless, when)
-import Data.Bits
-import Data.IORef
+import Control.Monad ((=<<), forM_, liftM, unless, when)
+import Data.Bits ((.&.), shiftL, shiftR)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (Maybe(..), isJust)
-import Foreign.ForeignPtr
-import Foreign.Storable
-import GHC.Base (Monad(..), ($), const, otherwise)
+import Foreign.ForeignPtr (ForeignPtr, mallocForeignPtr, withForeignPtr)
+import Foreign.Storable (peek, poke)
+import GHC.Base (Monad(..), ($), const, flip, otherwise)
 import GHC.Classes (Eq(..), Ord(..))
 import GHC.Num (Num(..))
 import GHC.Prim (seq)
 import GHC.Types (Bool(..), IO(..), Int(..))
 import qualified Arr
+
+-- A very simple chained integer-keyed mutable hash table. We use
+-- power-of-two sizing, grow at a load factor of 0.75, and never
+-- shrink. The "hash function" is the identity function.
 
 newtype IntTable a = IntTable (IORef (IT a))
 
@@ -46,14 +51,12 @@ data IT a = IT {
 
 data Bucket a = Empty
               | Bucket {
-      bucketKey   :: {-# UNPACK #-} !Key
+      bucketKey   :: {-# UNPACK #-} !Int
     , bucketValue :: a
     , bucketNext  :: Bucket a
     }
 
-type Key = Int
-
-lookup :: Key -> IntTable a -> IO (Maybe a)
+lookup :: Int -> IntTable a -> IO (Maybe a)
 lookup k (IntTable ref) = do
   let go Bucket{..}
         | bucketKey == k = return (Just bucketValue)
@@ -74,36 +77,33 @@ new_ capacity = do
             , tabSize = size
             }
 
-(<>) :: Bucket a -> Bucket a -> Bucket a
-Empty        <> bs = bs
-b@Bucket{..} <> bs = b { bucketNext = bucketNext <> bs }
-infixr 5 <>
-
 grow :: IT a -> IORef (IT a) -> Int -> IO ()
 grow oldit ref size = do
   newit <- new_ (Arr.size (tabArr oldit) `shiftL` 1)
-  let copyOuter n !i
+  let copySlot n !i
         | n == size = return ()
         | otherwise = do
-          let inner !m Empty         = copyOuter m (i+1)
-              inner m bkt@Bucket{..} = do
+          let copyBucket !m Empty          = copySlot m (i+1)
+              copyBucket  m bkt@Bucket{..} = do
                 let idx = indexOf bucketKey newit
                 next <- Arr.read (tabArr newit) idx
                 Arr.write (tabArr newit) idx bkt { bucketNext = next }
-                inner (m+1) bucketNext
-          inner n =<< Arr.read (tabArr oldit) i
-  copyOuter 0 0
+                copyBucket (m+1) bucketNext
+          copyBucket n =<< Arr.read (tabArr oldit) i
+  copySlot 0 0
   withForeignPtr (tabSize newit) $ \ptr -> poke ptr size
   writeIORef ref newit
 
-insertWith :: (a -> a -> a) -> Key -> a -> IntTable a -> IO (Maybe a)
+insertWith :: (a -> a -> a) -> Int -> a -> IntTable a -> IO (Maybe a)
 insertWith f k v inttable@(IntTable ref) = do
   it@IT{..} <- readIORef ref
   let idx = indexOf k it
-  let go seen bkt@Bucket{..}
+      go seen bkt@Bucket{..}
         | bucketKey == k = do
-          let !v' = f bucketValue v
+          let !v' = f v bucketValue
               !next = seen <> bucketNext
+              Empty        <> bs = bs
+              b@Bucket{..} <> bs = b { bucketNext = bucketNext <> bs }
           Arr.write tabArr idx (Bucket k v' next)
           return (Just bucketValue)
         | otherwise = go bkt { bucketNext = seen } bucketNext
@@ -123,7 +123,12 @@ getSize (IntTable ref) = do
   IT{..} <- readIORef ref
   withForeignPtr tabSize peek
 
-toList :: IntTable a -> IO [(Key, a)]
+-- | Used to undo the effect of a prior insertWith.
+reset :: Int -> Maybe a -> IntTable a -> IO ()
+reset k (Just v) tbl = insertWith (flip const) k v tbl >> return ()
+reset k Nothing  tbl = delete k tbl >> return ()
+
+toList :: IntTable a -> IO [(Int, a)]
 toList (IntTable ref) = do
   IT{..} <- readIORef ref
   let outer acc i
@@ -135,19 +140,19 @@ toList (IntTable ref) = do
           inner acc =<< Arr.read tabArr i
   outer [] 0
 
-fromList :: [(Key, a)] -> IO (IntTable a)
+fromList :: [(Int, a)] -> IO (IntTable a)
 fromList kvs = do
   t <- new 64
-  forM_ kvs $ \(k,v) -> insertWith (\_ b -> b) k v t
+  forM_ kvs $ \(k,v) -> insertWith const k v t
   return t
 
-indexOf :: Key -> IT a -> Int
+indexOf :: Int -> IT a -> Int
 indexOf k IT{..} = k .&. (Arr.size tabArr - 1)
 
-delete :: Key -> IntTable a -> IO (Maybe a)
+delete :: Int -> IntTable a -> IO (Maybe a)
 delete k t = updateWith (const Nothing) k t
 
-updateWith :: (a -> Maybe a) -> Key -> IntTable a -> IO (Maybe a)
+updateWith :: (a -> Maybe a) -> Int -> IntTable a -> IO (Maybe a)
 updateWith f k (IntTable ref) = do
   it@IT{..} <- readIORef ref
   let idx = indexOf k it
@@ -156,7 +161,7 @@ updateWith f k (IntTable ref) = do
             let fbv = f bucketValue
                 !nb = case fbv of
                         Just val -> bkt { bucketValue = val }
-                        Nothing -> bucketNext
+                        Nothing  -> bucketNext
             in (fbv, Just bucketValue, nb)
         | otherwise = case go changed bucketNext of
                         (fbv, ov, nb) -> (fbv, ov, bkt { bucketNext = nb })
