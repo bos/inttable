@@ -125,7 +125,7 @@ getSize (IntTable ref) = do
 
 -- | Used to undo the effect of a prior insertWith.
 reset :: Int -> Maybe a -> IntTable a -> IO ()
-reset k (Just v) tbl = insertWith (flip const) k v tbl >> return ()
+reset k (Just v) tbl = insertWith const k v tbl >> return ()
 reset k Nothing  tbl = delete k tbl >> return ()
 
 toList :: IntTable a -> IO [(Int, a)]

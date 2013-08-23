@@ -4,7 +4,9 @@ module Main (main) where
 import Control.Applicative
 import Control.Monad
 import Data.Bits
+import Data.Function
 import Data.IntMap (IntMap)
+import Data.List
 import Data.Word (Word8)
 import IntTable (IntTable)
 import System.IO.Unsafe
@@ -80,6 +82,14 @@ t_updateWith k v kvs  = unsafePerformIO $ do
   v1 <- IT.updateWith f k it
   (v0 == v1 &&) <$> same kvs im it
 
+t_reset :: Int -> V -> [KV] -> Bool
+t_reset k v kvs = unsafePerformIO $ do
+  t0 <- IT.fromList kvs
+  t1 <- IT.fromList kvs
+  prev <- IT.insertWith (++) k v t0
+  IT.reset k prev t0
+  ((==) `on` sort) <$> IT.toList t0 <*> IT.toList t1
+
 main :: IO ()
 main = defaultMain properties
 
@@ -89,5 +99,6 @@ properties = [
   , testProperty "insertWith" t_insertWith
   , testProperty "delete_present" t_delete_present
   , testProperty "delete_missing" t_delete_missing
+  , testProperty "reset" t_reset
   , testProperty "updateWith" t_updateWith
   ]
